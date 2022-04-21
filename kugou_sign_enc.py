@@ -2,6 +2,8 @@ import binascii
 import json
 import re
 import hashlib
+import uuid
+import requests
 import rsa
 import base64
 from Crypto.PublicKey import RSA
@@ -28,12 +30,12 @@ class AESCBC:
 
     def encrypt(self, text):
         generator = AES.new(self.key, self.mode, self.iv)
-        print("\nkey:{0}\niv：{1}\n".format(self.key.hex(), self.iv.hex()))
+        print("\nkey:{0}\niv：{1}\n".format(self.key, self.iv))
         crypt = generator.encrypt(self.PADDING(text).encode('utf-8'))
         # crypted_str = base64.b64encode(crypt)   #输出Base64
         crypted_str = binascii.b2a_hex(crypt)  # 输出Hex
         result = crypted_str.decode()
-        return self.key.hex(), result.upper()
+        return result.upper()
 
     def decrypt(self, text):
         generator = AES.new(self.key, self.mode, self.iv)
@@ -66,13 +68,20 @@ class RsaNopadding:
 if __name__ == '__main__':
     # clienttime_ms
     t = time.time()
+    t1 = int(round(t))
     t = int(round(t * 1000))
     print("clienttime_ms: {}".format(t))
+    print("clienttime: {}".format(t1))
 
     # params sign
-    aes = AESCBC(get_random_bytes(32))
-    params_encrypt = '{{"username":"13062581696","clienttime_ms":"{}","pwd":"557998555"}}'.format(t)
-    key, params_data = aes.encrypt(params_encrypt)
+    key = get_random_bytes(16).hex()
+    # key = "0E88FE37F53E7E0C609C2C7B4F115B2A"
+    # t = "1650509161270"
+    # t1 = "1650509161"
+    i_key = hashlib.md5(key.encode()).hexdigest()
+    aes = AESCBC(i_key.encode())
+    params_encrypt = '{{"username":"13062581668","clienttime_ms":"{}","pwd":"123456789"}}'.format(t)
+    params_data = aes.encrypt(params_encrypt)
     print("\nparams加密前:{0}\nparams加密后：{1}\n".format(params_encrypt, params_data))
 
     # pk sign
@@ -83,17 +92,20 @@ if __name__ == '__main__':
     print("\npk加密前:{0}\npk加密后：{1}\n".format(message, pk_data))
 
     # t1 sign
-    t1_encrypt = "|{}".format(t)
-    key = bytes.fromhex('bdeaed243193ce11ac913bbd48d340a4'.encode().hex())
+    t1_encrypt = "|{}".format(t + 100)
+    # t1_encrypt = "|1650506454427"
+    key = bytes.fromhex('6264656165643234333139336365313161633931336262643438643334306134')
     aes = AESCBC(key)
-    key, t1_data = aes.encrypt(t1_encrypt)
+    t1_data = aes.encrypt(t1_encrypt)
     print("\nt1加密前:{0}\nt1加密后：{1}\n".format(t1_encrypt, t1_data))
 
     # t2 sign
-    t2_encrypt = "||9eea2d301e53|Pixel 4|{}".format(t)
-    key = bytes.fromhex('dc8e123f07636a41361b62235fc313ac'.encode().hex())
+    t2_encrypt = "5c539aee628111af4fc4645c761885bf|5c539aee628111af4fc4645c761885bf|9eea2d301e53|Pixel 4|{}".format(
+        t + 10)
+    # t2_encrypt = "5c539aee628111af4fc4645c761885bf|5c539aee628111af4fc4645c761885bf|9eea2d301e53|Pixel 4|1650506454441"
+    key = bytes.fromhex('6463386531323366303736333661343133363162363232333566633331336163')
     aes = AESCBC(key)
-    key, t2_data = aes.encrypt(t2_encrypt)
+    t2_data = aes.encrypt(t2_encrypt)
     print("\nt2加密前:{0}\nt2加密后：{1}\n".format(t2_encrypt, t2_data))
 
     # key sign
@@ -115,12 +127,62 @@ if __name__ == '__main__':
         "support_multi": "1",
         "t2": t2_data,
         "key": key_data,
-        "username": "130*****669"
+        "username": "130*****668"
     }
 
     # signature
     s = "4lu0l3cujt2KWIjcM374F8oX5N2lGY59appid=1131clienttime={}clientver=55400dfid=1tRbIu1gsMjC2Htvln120WPpmid=5c539aee628111af4fc4645c761885bfuuid=5c539aee628111af4fc4645c761885bf".format(
-        t) + str(login_data) + "4lu0l3cujt2KWIjcM374F8oX5N2lGY59"
+        t1) + str(login_data).replace("\'", "\"") + "4lu0l3cujt2KWIjcM374F8oX5N2lGY59"
     signature_data = hashlib.md5(s.encode()).hexdigest()
     print("\nsignature加密前:{0}\nsignature加密后：{1}\n".format(s, signature_data))
 
+    # login
+    url = 'https://loginservice.kugou.com/v9/login_by_pwd?appid=1131&clienttime={}&clientver=55400&dfid=1tRbIu1gsMjC2Htvln120WPp&mid=5c539aee628111af4fc4645c761885bf&uuid=5c539aee628111af4fc4645c761885bf&signature={}'.format(
+        t1, signature_data)
+    uid4 = uuid.uuid4()
+    header = {
+        "user-agent": "Android10-Phone-201-0-FANet-wifi",
+        "accept-encoding": "gzip, deflate",
+        "kg-rc": "1",
+        "kg-thash": "c7ecef3",
+        # "verifydata": "params={};pk={}".format(params_data, pk_data),
+        "reqno": str(uid4),
+        "content-type": "application/json"
+    }
+    proxies = {"http": None, "https": None}
+    r = requests.post(url=url, headers=header, data=json.dumps(login_data), proxies=proxies)
+    ret_data = r.text
+    print(ret_data)
+    ssa_code = r.headers["ssa-code"]
+    print("ssa_code:{}".format(ssa_code))
+    sign_str = "4lu0l3cujt2KWIjcM374F8oX5N2lGY59appid1131clientver55400eventid{}imei5c539aee628111af4fc4645c761885bfmacAddress-mid5c539aee628111af4fc4645c761885bfregisterTime0timestamp{}userid0xForwardedForxxxxxx4lu0l3cujt2KWIjcM374F8oX5N2lGY59".format(
+        ssa_code, t1)
+    sign_data = hashlib.md5(sign_str.encode()).hexdigest()
+    print("\nsign加密前:{0}\nsign加密后：{1}\n".format(sign_str, sign_data))
+    verify_data = {
+        "eventid": ssa_code,
+        "macAddress": "-",
+        "registerTime": "0",
+        "appid": "1131",
+        "sign": sign_data,
+        "imei": "5c539aee628111af4fc4645c761885bf",
+        "mid": "5c539aee628111af4fc4645c761885bf",
+        "clientver": "55400",
+        "xForwardedFor": "xxxxxx",
+        "android_id": "5c539aee628111af4fc4645c761885bf",
+        "userid": "0",
+        "timestamp": t1
+    }
+
+    verify_headers = {
+        "User-Agent": "Android10-Phone-201-0-FANet-wifi",
+        "Accept-Encoding": "gzip, deflate",
+        "KG-RC": "1",
+        "reqNo": str(uid4)
+    }
+
+    if json.loads(ret_data)["data"] in "请验证":
+        print("verify")
+        verify_url = "http://verifycode.service.kugou.com/v1/get_verify_info"
+        verify_rsp = requests.post(url=verify_url, data=verify_data)
+        print(verify_rsp.text)
