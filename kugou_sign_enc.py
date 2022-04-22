@@ -184,5 +184,5 @@ if __name__ == '__main__':
     if json.loads(ret_data)["data"] in "请验证":
         print("verify")
         verify_url = "http://verifycode.service.kugou.com/v1/get_verify_info"
-        verify_rsp = requests.post(url=verify_url, data=verify_data)
+        verify_rsp = requests.post(url=verify_url, data=json.dumps(verify_code_data))
         print(verify_rsp.text)
