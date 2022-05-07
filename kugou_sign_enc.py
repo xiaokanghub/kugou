@@ -159,7 +159,7 @@ if __name__ == '__main__':
         ssa_code, t1)
     sign_data = hashlib.md5(sign_str.encode()).hexdigest()
     print("\nsign加密前:{0}\nsign加密后：{1}\n".format(sign_str, sign_data))
-    verify_data = {
+    verify_code_data = {
         "eventid": ssa_code,
         "macAddress": "-",
         "registerTime": "0",
